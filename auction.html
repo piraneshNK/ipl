@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auction Room</title>
+</head>
+<body>
+    <h1 id="roomTitle">IPL Auction Room</h1>
+    <h2 id="teamTitle"></h2>
+
+    <h3>Current Player: <span id="playerName">None</span></h3>
+    <p>Role: <span id="playerRole">-</span></p>
+    <p>Base Price: <span id="basePrice">0</span> Cr</p>
+    <p>Highest Bid: <span id="highestBid">0</span> Cr</p>
+
+    <button onclick="placeBid(5)">5L</button>
+    <button onclick="placeBid(10)">10L</button>
+    <button onclick="placeBid(25)">25L</button>
+    <button onclick="placeBid(50)">50L</button>
+    <button onclick="placeBid(100)">1 Cr</button>
+
+    <script>
+        const { room, team } = Object.fromEntries(new URLSearchParams(window.location.search));
+
+        document.getElementById("roomTitle").innerText = `Room: ${room}`;
+        document.getElementById("teamTitle").innerText = `Your Team: ${team}`;
+
+        function placeBid(amount) {
+            alert(`${team} placed a bid of ${amount}L!`);
+        }
+    </script>
+</body>
+</html>

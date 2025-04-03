@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Selection</title>
+</head>
+<body>
+    <h1>Select Your Team</h1>
+    <p id="roomDetails"></p>
+
+    <div id="teams">
+        <button onclick="selectTeam('MI')">Mumbai Indians</button>
+        <button onclick="selectTeam('CSK')">Chennai Super Kings</button>
+        <button onclick="selectTeam('RCB')">Royal Challengers Bangalore</button>
+        <button onclick="selectTeam('KKR')">Kolkata Knight Riders</button>
+        <button onclick="selectTeam('SRH')">Sunrisers Hyderabad</button>
+        <button onclick="selectTeam('RR')">Rajasthan Royals</button>
+        <button onclick="selectTeam('DC')">Delhi Capitals</button>
+        <button onclick="selectTeam('PBKS')">Punjab Kings</button>
+        <button onclick="selectTeam('LSG')">Lucknow Super Giants</button>
+        <button onclick="selectTeam('GT')">Gujarat Titans</button>
+        <button onclick="selectTeam('Auctioneer')">Be the Auctioneer</button>
+    </div>
+
+    <button id="readyButton" style="display: none;" onclick="markReady()">I'm Ready</button>
+
+    <script>
+        let selectedTeam = null;
+        const { room, password } = Object.fromEntries(new URLSearchParams(window.location.search));
+
+        document.getElementById("roomDetails").innerText = `Room: ${room}`;
+
+        function selectTeam(team) {
+            selectedTeam = team;
+            document.getElementById("readyButton").style.display = "block";
+        }
+
+        function markReady() {
+            if (!selectedTeam) {
+                alert("Please select a team first!");
+                return;
+            }
+
+            window.location.href = `auction.html?room=${room}&team=${selectedTeam}`;
+        }
+    </script>
+</body>
+</html>

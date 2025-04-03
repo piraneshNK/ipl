@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPL Auction - Home</title>
+</head>
+<body>
+    <h1>Welcome to IPL Auction</h1>
+    <label for="roomName">Enter Room Name:</label>
+    <input type="text" id="roomName" placeholder="Game Room Name">
+    <label for="roomPassword">Enter Password:</label>
+    <input type="password" id="roomPassword" placeholder="Game Room Password">
+    <button onclick="joinRoom()">Create/Join Room</button>
+
+    <script>
+        function joinRoom() {
+            const roomName = document.getElementById("roomName").value;
+            const roomPassword = document.getElementById("roomPassword").value;
+
+            if (roomName.trim() === "" || roomPassword.trim() === "") {
+                alert("Please enter both a room name and a password!");
+                return;
+            }
+
+            // Redirect to team selection
+            window.location.href = `team_selection.html?room=${encodeURIComponent(roomName)}&password=${encodeURIComponent(roomPassword)}`;
+        }
+    </script>
+</body>
+</html>
