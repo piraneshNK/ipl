@@ -2,152 +2,125 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>IPL Auction</title>
+  <title>IPL Auction Room</title>
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/players.js"></script>
   <style>
-    body { font-family: Arial; background: #f4f4f4; margin: 0; padding: 20px; }
-    h1 { text-align: center; }
-    #playerList button { display: block; margin: 5px; padding: 8px; width: 100%; }
-    #auctionArea, #teamTable { margin-top: 20px; }
-    .team-bid { font-weight: bold; margin: 4px 0; }
-    .bid-buttons button { margin-right: 10px; }
-    .message-area { font-size: 18px; font-weight: bold; margin: 10px 0; text-align: center; }
-    .timer { font-size: 20px; text-align: right; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+    body { font-family: Arial; background: #f4f4f4; text-align: center; }
+    .player-card { border: 1px solid #ccc; padding: 10px; margin: 10px; background: #fff; }
+    .bidding-buttons button { margin: 5px; padding: 10px; }
+    .summary-table, .bids-log { margin: 20px auto; width: 80%; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #ddd; padding: 8px; }
+    #timer { font-size: 24px; color: red; margin: 10px 0; }
   </style>
 </head>
 <body>
+  <h2 id="room-name">Room: </h2>
+  <div id="player-info" class="player-card"></div>
+  <div id="timer">Time Left: 10s</div>
 
-<h1>IPL Auction Room</h1>
-
-<div id="playerList">
-  <h2>Start Auction</h2>
-  <!-- Buttons will be added here -->
-</div>
-
-<div id="auctionArea" style="display:none;">
-  <div class="timer" id="timer">Timer: 10</div>
-  <div class="message-area" id="auctionMessage"></div>
-
-  <div id="bidButtons" class="bid-buttons">
-    <button onclick="placeBid(500000)">5L</button>
-    <button onclick="placeBid(1000000)">10L</button>
-    <button onclick="placeBid(2500000)">25L</button>
-    <button onclick="placeBid(5000000)">50L</button>
-    <button onclick="placeBid(10000000)">1Cr</button>
+  <div class="bidding-buttons">
+    <button onclick="placeBid(0.05)">5L</button>
+    <button onclick="placeBid(0.1)">10L</button>
+    <button onclick="placeBid(0.25)">25L</button>
+    <button onclick="placeBid(0.5)">50L</button>
+    <button onclick="placeBid(1)">1Cr</button>
   </div>
 
-  <div id="currentBids"></div>
-</div>
+  <div id="bids-log" class="bids-log"></div>
+  <button id="next-btn" onclick="nextPlayer()" style="display:none;">Next Player</button>
 
-<div id="teamTable">
-  <h2>Your Team</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Player</th>
-        <th>Role</th>
-        <th>Price</th>
-      </tr>
-    </thead>
-    <tbody id="teamPlayers">
-    </tbody>
+  <h3>Auction Summary</h3>
+  <table class="summary-table" id="summary-table">
+    <thead><tr><th>Team</th><th>Player</th><th>Price (Cr)</th></tr></thead>
+    <tbody></tbody>
   </table>
-  <div id="totalSpent">Total Spent: ₹0</div>
-  <div id="remaining">Remaining: ₹100000000</div>
-</div>
 
-<script>
-  const socket = io();
-  const purse = 100000000; // 100 Cr
-  let currentSpent = 0;
-  let currentRoom = localStorage.getItem("room") || "default";
-  let teamName = localStorage.getItem("team") || "My Team";
+  <script>
+    const socket = io();
+    const urlParams = new URLSearchParams(window.location.search);
+    const room = urlParams.get('room');
+    const team = urlParams.get('team');
+    let currentBid = 0;
+    let highestBidder = null;
+    let timeLeft = 10;
+    let timerInterval = null;
+    let currentPlayer = {};
 
-  let auctionPlayer = null;
-  let highestBid = 0;
-  let highestBidder = "";
-  let auctionTimer = null;
-  let timeLeft = 10;
+    document.getElementById("room-name").textContent = "Room: " + room;
+    socket.emit("joinRoom", { room, team });
 
-  const playerListDiv = document.getElementById("playerList");
-  const auctionArea = document.getElementById("auctionArea");
-  const auctionMsg = document.getElementById("auctionMessage");
-  const currentBidsDiv = document.getElementById("currentBids");
-  const teamTable = document.getElementById("teamPlayers");
-  const spentDiv = document.getElementById("totalSpent");
-  const remainingDiv = document.getElementById("remaining");
-
-  function loadPlayers() {
-    iplPlayers.forEach(player => {
-      const btn = document.createElement("button");
-      btn.innerText = `${player.name} - ${player.role} - ₹${player.basePrice / 100000}L`;
-      btn.onclick = () => startAuction(player);
-      playerListDiv.appendChild(btn);
+    socket.on("startAuction", player => {
+      currentPlayer = player;
+      document.getElementById("player-info").innerHTML = `
+        <h3>${player.name}</h3>
+        <p>Role: ${player.role}</p>
+        <p>Base Price: ₹${player.basePrice} Cr</p>
+        <p>Current Bid: ₹${currentBid} Cr</p>
+      `;
+      document.getElementById("bids-log").innerHTML = "";
+      currentBid = player.basePrice;
+      highestBidder = null;
+      timeLeft = 10;
+      startTimer();
     });
-  }
 
-  function startAuction(player) {
-    socket.emit("start-auction", { room: currentRoom, player });
-  }
-
-  function updateTimer() {
-    document.getElementById("timer").innerText = `Timer: ${timeLeft}`;
-    if (timeLeft <= 0) {
-      clearInterval(auctionTimer);
-      socket.emit("auction-winner", { room: currentRoom, player: auctionPlayer, winner: highestBidder, price: highestBid });
+    function placeBid(amount) {
+      currentBid += amount;
+      highestBidder = team;
+      socket.emit("placeBid", { room, team, amount, total: currentBid });
+      document.getElementById("player-info").querySelector("p:last-child").textContent = `Current Bid: ₹${currentBid} Cr`;
     }
-    timeLeft--;
-  }
 
-  function placeBid(amount) {
-    if (currentSpent + amount > purse) return alert("Not enough balance");
-    socket.emit("place-bid", { room: currentRoom, team: teamName, amount });
-  }
+    socket.on("newBid", ({ team, amount, total }) => {
+      const log = document.getElementById("bids-log");
+      const entry = document.createElement("p");
+      entry.textContent = `${team} bids ₹${total.toFixed(2)} Cr`;
+      log.appendChild(entry);
+    });
 
-  socket.on("auction-started", (player) => {
-    auctionPlayer = player;
-    highestBid = player.basePrice;
-    highestBidder = "";
-    auctionArea.style.display = "block";
-    auctionMsg.innerText = `Auction: ${player.name} (${player.role}) - Base ₹${player.basePrice / 100000}L`;
-    currentBidsDiv.innerHTML = "";
-    timeLeft = 10;
-    updateTimer();
-    clearInterval(auctionTimer);
-    auctionTimer = setInterval(updateTimer, 1000);
-  });
+    function startTimer() {
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById("timer").textContent = `Time Left: ${timeLeft}s`;
+        if (timeLeft <= 0) {
+          clearInterval(timerInterval);
+          declareWinner();
+        }
+      }, 1000);
+    }
 
-  socket.on("new-bid", ({ team, total }) => {
-    highestBid = total;
-    highestBidder = team;
-    const bidLine = document.createElement("div");
-    bidLine.className = "team-bid";
-    bidLine.innerText = `${team} bids ₹${total / 100000}L`;
-    currentBidsDiv.appendChild(bidLine);
-  });
+    function declareWinner() {
+      const log = document.getElementById("bids-log");
+      const winMsg = document.createElement("h4");
 
-  socket.on("announce-winner", ({ player, winner, price }) => {
-    auctionMsg.innerText = `${winner} wins ${player.name} for ₹${price / 100000}L!`;
-    if (winner === teamName) {
-      currentSpent += price;
-      spentDiv.innerText = `Total Spent: ₹${currentSpent}`;
-      remainingDiv.innerText = `Remaining: ₹${purse - currentSpent}`;
+      if (highestBidder) {
+        winMsg.textContent = `${highestBidder} won ${currentPlayer.name} for ₹${currentBid.toFixed(2)} Cr!`;
+        socket.emit("declareWinner", {
+          room,
+          team: highestBidder,
+          player: currentPlayer.name,
+          price: currentBid
+        });
+        addToSummary(highestBidder, currentPlayer.name, currentBid);
+      } else {
+        winMsg.textContent = `No bids for ${currentPlayer.name}`;
+      }
+      log.appendChild(winMsg);
+      document.getElementById("next-btn").style.display = "inline";
+    }
 
+    function addToSummary(team, player, price) {
       const row = document.createElement("tr");
-      row.innerHTML = `<td>${player.name}</td><td>${player.role}</td><td>₹${price / 100000}L</td>`;
-      teamTable.appendChild(row);
+      row.innerHTML = `<td>${team}</td><td>${player}</td><td>₹${price.toFixed(2)} Cr</td>`;
+      document.querySelector("#summary-table tbody").appendChild(row);
     }
-    setTimeout(() => {
-      auctionArea.style.display = "none";
-    }, 5000);
-  });
 
-  loadPlayers();
-</script>
-
+    function nextPlayer() {
+      socket.emit("nextPlayer", room);
+      document.getElementById("next-btn").style.display = "none";
+    }
+  </script>
 </body>
 </html>
