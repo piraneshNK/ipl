@@ -1,31 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IPL Auction - Home</title>
+  <meta charset="UTF-8">
+  <title>IPL Auction | Home</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 50px;
+      background-color: #f2f2f2;
+    }
+    h1 {
+      color: #333;
+    }
+    input {
+      padding: 10px;
+      margin: 10px;
+      width: 250px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px;
+      border: none;
+      cursor: pointer;
+    }
+    .create-btn {
+      background-color: #28a745;
+      color: white;
+    }
+    .create-btn:hover {
+      background-color: #1e7e34;
+    }
+    .join-btn {
+      background-color: #007bff;
+      color: white;
+    }
+    .join-btn:hover {
+      background-color: #0056b3;
+    }
+  </style>
 </head>
 <body>
-    <h1>Welcome to IPL Auction</h1>
-    <label for="roomName">Enter Room Name:</label>
-    <input type="text" id="roomName" placeholder="Game Room Name">
-    <label for="roomPassword">Enter Password:</label>
-    <input type="password" id="roomPassword" placeholder="Game Room Password">
-    <button onclick="joinRoom()">Create/Join Room</button>
 
-    <script>
-        function joinRoom() {
-            const roomName = document.getElementById("roomName").value;
-            const roomPassword = document.getElementById("roomPassword").value;
+  <h1>🏏 IPL Auction Game</h1>
 
-            if (roomName.trim() === "" || roomPassword.trim() === "") {
-                alert("Please enter both a room name and a password!");
-                return;
-            }
+  <div>
+    <input type="text" id="roomName" placeholder="Room Name" /><br>
+    <input type="password" id="roomPassword" placeholder="Password" /><br>
 
-            // Redirect to team selection
-            window.location.href = `team_selection.html?room=${encodeURIComponent(roomName)}&password=${encodeURIComponent(roomPassword)}`;
-        }
-    </script>
+    <button class="create-btn" onclick="handleRoom('create')">Create Room</button>
+    <button class="join-btn" onclick="handleRoom('join')">Join Room</button>
+  </div>
+
+  <script>
+    function handleRoom(action) {
+      const room = document.getElementById("roomName").value.trim();
+      const password = document.getElementById("roomPassword").value.trim();
+
+      if (!room || !password) {
+        alert("Please enter both room name and password.");
+        return;
+      }
+
+      // Redirect to team selection page with action type
+      window.location.href = `team_selection.html?room=${encodeURIComponent(room)}&password=${encodeURIComponent(password)}&action=${action}`;
+    }
+  </script>
+
 </body>
 </html>

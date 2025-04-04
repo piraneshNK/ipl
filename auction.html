@@ -1,34 +1,153 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auction Room</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IPL Auction</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/players.js"></script>
+  <style>
+    body { font-family: Arial; background: #f4f4f4; margin: 0; padding: 20px; }
+    h1 { text-align: center; }
+    #playerList button { display: block; margin: 5px; padding: 8px; width: 100%; }
+    #auctionArea, #teamTable { margin-top: 20px; }
+    .team-bid { font-weight: bold; margin: 4px 0; }
+    .bid-buttons button { margin-right: 10px; }
+    .message-area { font-size: 18px; font-weight: bold; margin: 10px 0; text-align: center; }
+    .timer { font-size: 20px; text-align: right; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+  </style>
 </head>
 <body>
-    <h1 id="roomTitle">IPL Auction Room</h1>
-    <h2 id="teamTitle"></h2>
 
-    <h3>Current Player: <span id="playerName">None</span></h3>
-    <p>Role: <span id="playerRole">-</span></p>
-    <p>Base Price: <span id="basePrice">0</span> Cr</p>
-    <p>Highest Bid: <span id="highestBid">0</span> Cr</p>
+<h1>IPL Auction Room</h1>
 
-    <button onclick="placeBid(5)">5L</button>
-    <button onclick="placeBid(10)">10L</button>
-    <button onclick="placeBid(25)">25L</button>
-    <button onclick="placeBid(50)">50L</button>
-    <button onclick="placeBid(100)">1 Cr</button>
+<div id="playerList">
+  <h2>Start Auction</h2>
+  <!-- Buttons will be added here -->
+</div>
 
-    <script>
-        const { room, team } = Object.fromEntries(new URLSearchParams(window.location.search));
+<div id="auctionArea" style="display:none;">
+  <div class="timer" id="timer">Timer: 10</div>
+  <div class="message-area" id="auctionMessage"></div>
 
-        document.getElementById("roomTitle").innerText = `Room: ${room}`;
-        document.getElementById("teamTitle").innerText = `Your Team: ${team}`;
+  <div id="bidButtons" class="bid-buttons">
+    <button onclick="placeBid(500000)">5L</button>
+    <button onclick="placeBid(1000000)">10L</button>
+    <button onclick="placeBid(2500000)">25L</button>
+    <button onclick="placeBid(5000000)">50L</button>
+    <button onclick="placeBid(10000000)">1Cr</button>
+  </div>
 
-        function placeBid(amount) {
-            alert(`${team} placed a bid of ${amount}L!`);
-        }
-    </script>
+  <div id="currentBids"></div>
+</div>
+
+<div id="teamTable">
+  <h2>Your Team</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th>Role</th>
+        <th>Price</th>
+      </tr>
+    </thead>
+    <tbody id="teamPlayers">
+    </tbody>
+  </table>
+  <div id="totalSpent">Total Spent: ₹0</div>
+  <div id="remaining">Remaining: ₹100000000</div>
+</div>
+
+<script>
+  const socket = io();
+  const purse = 100000000; // 100 Cr
+  let currentSpent = 0;
+  let currentRoom = localStorage.getItem("room") || "default";
+  let teamName = localStorage.getItem("team") || "My Team";
+
+  let auctionPlayer = null;
+  let highestBid = 0;
+  let highestBidder = "";
+  let auctionTimer = null;
+  let timeLeft = 10;
+
+  const playerListDiv = document.getElementById("playerList");
+  const auctionArea = document.getElementById("auctionArea");
+  const auctionMsg = document.getElementById("auctionMessage");
+  const currentBidsDiv = document.getElementById("currentBids");
+  const teamTable = document.getElementById("teamPlayers");
+  const spentDiv = document.getElementById("totalSpent");
+  const remainingDiv = document.getElementById("remaining");
+
+  function loadPlayers() {
+    iplPlayers.forEach(player => {
+      const btn = document.createElement("button");
+      btn.innerText = `${player.name} - ${player.role} - ₹${player.basePrice / 100000}L`;
+      btn.onclick = () => startAuction(player);
+      playerListDiv.appendChild(btn);
+    });
+  }
+
+  function startAuction(player) {
+    socket.emit("start-auction", { room: currentRoom, player });
+  }
+
+  function updateTimer() {
+    document.getElementById("timer").innerText = `Timer: ${timeLeft}`;
+    if (timeLeft <= 0) {
+      clearInterval(auctionTimer);
+      socket.emit("auction-winner", { room: currentRoom, player: auctionPlayer, winner: highestBidder, price: highestBid });
+    }
+    timeLeft--;
+  }
+
+  function placeBid(amount) {
+    if (currentSpent + amount > purse) return alert("Not enough balance");
+    socket.emit("place-bid", { room: currentRoom, team: teamName, amount });
+  }
+
+  socket.on("auction-started", (player) => {
+    auctionPlayer = player;
+    highestBid = player.basePrice;
+    highestBidder = "";
+    auctionArea.style.display = "block";
+    auctionMsg.innerText = `Auction: ${player.name} (${player.role}) - Base ₹${player.basePrice / 100000}L`;
+    currentBidsDiv.innerHTML = "";
+    timeLeft = 10;
+    updateTimer();
+    clearInterval(auctionTimer);
+    auctionTimer = setInterval(updateTimer, 1000);
+  });
+
+  socket.on("new-bid", ({ team, total }) => {
+    highestBid = total;
+    highestBidder = team;
+    const bidLine = document.createElement("div");
+    bidLine.className = "team-bid";
+    bidLine.innerText = `${team} bids ₹${total / 100000}L`;
+    currentBidsDiv.appendChild(bidLine);
+  });
+
+  socket.on("announce-winner", ({ player, winner, price }) => {
+    auctionMsg.innerText = `${winner} wins ${player.name} for ₹${price / 100000}L!`;
+    if (winner === teamName) {
+      currentSpent += price;
+      spentDiv.innerText = `Total Spent: ₹${currentSpent}`;
+      remainingDiv.innerText = `Remaining: ₹${purse - currentSpent}`;
+
+      const row = document.createElement("tr");
+      row.innerHTML = `<td>${player.name}</td><td>${player.role}</td><td>₹${price / 100000}L</td>`;
+      teamTable.appendChild(row);
+    }
+    setTimeout(() => {
+      auctionArea.style.display = "none";
+    }, 5000);
+  });
+
+  loadPlayers();
+</script>
+
 </body>
 </html>

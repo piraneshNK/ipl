@@ -1,49 +1,79 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Selection</title>
+  <meta charset="UTF-8">
+  <title>Select Your Team - IPL Auction</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    body { font-family: Arial; text-align: center; background: #f9f9f9; }
+    .team-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; max-width: 800px; margin: 20px auto; }
+    button { padding: 10px 15px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; }
+    .ready { margin-top: 20px; padding: 15px 25px; background: #4CAF50; color: white; font-size: 18px; }
+    .status { font-size: 18px; margin-top: 20px; }
+  </style>
 </head>
 <body>
-    <h1>Select Your Team</h1>
-    <p id="roomDetails"></p>
 
-    <div id="teams">
-        <button onclick="selectTeam('MI')">Mumbai Indians</button>
-        <button onclick="selectTeam('CSK')">Chennai Super Kings</button>
-        <button onclick="selectTeam('RCB')">Royal Challengers Bangalore</button>
-        <button onclick="selectTeam('KKR')">Kolkata Knight Riders</button>
-        <button onclick="selectTeam('SRH')">Sunrisers Hyderabad</button>
-        <button onclick="selectTeam('RR')">Rajasthan Royals</button>
-        <button onclick="selectTeam('DC')">Delhi Capitals</button>
-        <button onclick="selectTeam('PBKS')">Punjab Kings</button>
-        <button onclick="selectTeam('LSG')">Lucknow Super Giants</button>
-        <button onclick="selectTeam('GT')">Gujarat Titans</button>
-        <button onclick="selectTeam('Auctioneer')">Be the Auctioneer</button>
-    </div>
+  <h1>Select Your IPL Team</h1>
+  <div class="team-grid" id="teamGrid"></div>
 
-    <button id="readyButton" style="display: none;" onclick="markReady()">I'm Ready</button>
+  <button id="readyBtn" class="ready" disabled>I'm Ready</button>
 
-    <script>
-        let selectedTeam = null;
-        const { room, password } = Object.fromEntries(new URLSearchParams(window.location.search));
+  <div class="status" id="statusText">0 / 0 Players Ready</div>
 
-        document.getElementById("roomDetails").innerText = `Room: ${room}`;
+  <script>
+    const socket = io("https://calico-mercury-skink.glitch.me");
+    const teamGrid = document.getElementById("teamGrid");
+    const readyBtn = document.getElementById("readyBtn");
+    const statusText = document.getElementById("statusText");
 
-        function selectTeam(team) {
-            selectedTeam = team;
-            document.getElementById("readyButton").style.display = "block";
-        }
+    const teams = [
+      "CSK", "MI", "RCB", "KKR", "SRH",
+      "RR", "DC", "LSG", "PBKS", "GT"
+    ];
 
-        function markReady() {
-            if (!selectedTeam) {
-                alert("Please select a team first!");
-                return;
-            }
+    let selectedTeam = null;
+    let room = localStorage.getItem("room");
 
-            window.location.href = `auction.html?room=${room}&team=${selectedTeam}`;
-        }
-    </script>
+    if (!room) {
+      room = prompt("Enter Room Name:");
+      localStorage.setItem("room", room);
+    }
+
+    // Join the room
+    socket.emit("join-room", { room });
+
+    // Display teams
+    teams.forEach(team => {
+      const btn = document.createElement("button");
+      btn.textContent = team;
+      btn.onclick = () => {
+        selectedTeam = team;
+        readyBtn.disabled = false;
+
+        document.querySelectorAll(".team-grid button").forEach(b => b.style.background = "");
+        btn.style.background = "#ffd700";
+      };
+      teamGrid.appendChild(btn);
+    });
+
+    // When ready
+    readyBtn.onclick = () => {
+      if (!selectedTeam) return alert("Select a team first");
+      socket.emit("player-ready", { room, team: selectedTeam });
+      readyBtn.disabled = true;
+      readyBtn.textContent = "Waiting for Others...";
+    };
+
+    // Status update
+    socket.on("room-status", ({ total, ready }) => {
+      statusText.textContent = `${ready} / ${total} Players Ready`;
+    });
+
+    // All players ready → start auction
+    socket.on("start-auction", () => {
+      window.location.href = "auction.html";
+    });
+  </script>
 </body>
 </html>
