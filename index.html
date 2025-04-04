@@ -1,34 +1,102 @@
 <!DOCTYPE html>
-<html>
-<head><title>IPL Auction</title>
-
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IPL Auction Room</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f9f9f9;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    h1 {
+      color: #2c3e50;
+    }
+    .box {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    input {
+      padding: 10px;
+      width: 100%;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px 10px 0 10px;
+      border: none;
+      border-radius: 5px;
+      background-color: #3498db;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    small {
+      display: block;
+      margin-top: 15px;
+      color: #666;
+    }
+  </style>
 </head>
 <body>
-  <h1>Welcome to IPL Auction</h1>
-  <input id="name" placeholder="Enter your name" />
-  <input id="room" placeholder="Room Name" />
-  <button onclick="createRoom()">Create Room</button>
-  <button onclick="joinRoom()">Join Room</button>
+  <div class="box">
+    <h1>🏏 IPL Auction Room</h1>
 
-  <script src="/socket.io/socket.io.js"></script>
+    <input type="text" id="room" placeholder="Enter Room Name" required />
+    <input type="password" id="password" placeholder="Enter Room Password" required />
+
+    <div>
+      <button onclick="createRoom()">Create Room</button>
+      <button onclick="joinRoom()">Join Room</button>
+    </div>
+
+    <small>All users with the same room name & password join the same game.</small>
+  </div>
+
   <script>
-    const socket = io();
-
     function createRoom() {
-      const name = document.getElementById("name").value;
-      const room = document.getElementById("room").value;
+      const room = document.getElementById("room").value.trim();
+      const password = document.getElementById("password").value.trim();
+
+      if (!room || !password) {
+        alert("Please enter both Room Name and Password");
+        return;
+      }
+
       localStorage.setItem("room", room);
-      localStorage.setItem("name", name);
-      socket.emit("create-room", { room, name });
+      localStorage.setItem("password", password);
+      localStorage.setItem("isHost", true);
+
       window.location.href = "team.html";
     }
 
     function joinRoom() {
-      const name = document.getElementById("name").value;
-      const room = document.getElementById("room").value;
+      const room = document.getElementById("room").value.trim();
+      const password = document.getElementById("password").value.trim();
+
+      if (!room || !password) {
+        alert("Please enter both Room Name and Password");
+        return;
+      }
+
       localStorage.setItem("room", room);
-      localStorage.setItem("name", name);
-      socket.emit("join-room", { room, name });
+      localStorage.setItem("password", password);
+      localStorage.setItem("isHost", false);
+
       window.location.href = "team.html";
     }
   </script>
