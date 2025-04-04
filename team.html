@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head><title>Select Team</title></head>
+<body>
+  <h1>Team Selection</h1>
+  <div id="players"></div>
+  <select id="team">
+    <option>CSK</option>
+    <option>MI</option>
+    <option>RCB</option>
+    <option>RR</option>
+    <option>KKR</option>
+    <option>LSG</option>
+    <option>GT</option>
+    <option>PBKS</option>
+    <option>DC</option>
+    <option>SRH</option>
+  </select>
+  <button onclick="selectTeam()">Choose Team</button>
+  <button onclick="markReady()">Ready</button>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const name = localStorage.getItem("name");
+    const room = localStorage.getItem("room");
+
+    socket.emit("join-room", { room, name });
+
+    function selectTeam() {
+      const team = document.getElementById("team").value;
+      socket.emit("select-team", team);
+    }
+
+    function markReady() {
+      socket.emit("ready");
+    }
+
+    socket.on("update-players", (players) => {
+      document.getElementById("players").innerHTML = `
+        <h3>Players Ready: ${players.filter(p => p.ready).length}/${players.length}</h3>
+        ${players.map(p => `<div>${p.name} - ${p.team} ${p.ready ? "✅" : ""}</div>`).join("")}
+      `;
+    });
+
+    socket.on("start-auction", () => {
+      window.location.href = "auction.html";
+    });
+  </script>
+</body>
+</html>

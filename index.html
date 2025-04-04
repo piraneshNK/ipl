@@ -1,72 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>IPL Auction | Home</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 50px;
-      background-color: #f2f2f2;
-    }
-    h1 {
-      color: #333;
-    }
-    input {
-      padding: 10px;
-      margin: 10px;
-      width: 250px;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 16px;
-      margin: 10px;
-      border: none;
-      cursor: pointer;
-    }
-    .create-btn {
-      background-color: #28a745;
-      color: white;
-    }
-    .create-btn:hover {
-      background-color: #1e7e34;
-    }
-    .join-btn {
-      background-color: #007bff;
-      color: white;
-    }
-    .join-btn:hover {
-      background-color: #0056b3;
-    }
-  </style>
+<html>
+<head><title>IPL Auction</title>
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <h1>Welcome to IPL Auction</h1>
+  <input id="name" placeholder="Enter your name" />
+  <input id="room" placeholder="Room Name" />
+  <button onclick="createRoom()">Create Room</button>
+  <button onclick="joinRoom()">Join Room</button>
 
-  <h1>🏏 IPL Auction Game</h1>
-
-  <div>
-    <input type="text" id="roomName" placeholder="Room Name" /><br>
-    <input type="password" id="roomPassword" placeholder="Password" /><br>
-
-    <button class="create-btn" onclick="handleRoom('create')">Create Room</button>
-    <button class="join-btn" onclick="handleRoom('join')">Join Room</button>
-  </div>
-
+  <script src="/socket.io/socket.io.js"></script>
   <script>
-    function handleRoom(action) {
-      const room = document.getElementById("roomName").value.trim();
-      const password = document.getElementById("roomPassword").value.trim();
+    const socket = io();
 
-      if (!room || !password) {
-        alert("Please enter both room name and password.");
-        return;
-      }
+    function createRoom() {
+      const name = document.getElementById("name").value;
+      const room = document.getElementById("room").value;
+      localStorage.setItem("room", room);
+      localStorage.setItem("name", name);
+      socket.emit("create-room", { room, name });
+      window.location.href = "team.html";
+    }
 
-      // Redirect to team selection page with action type
-      window.location.href = `team_selection.html?room=${encodeURIComponent(room)}&password=${encodeURIComponent(password)}&action=${action}`;
+    function joinRoom() {
+      const name = document.getElementById("name").value;
+      const room = document.getElementById("room").value;
+      localStorage.setItem("room", room);
+      localStorage.setItem("name", name);
+      socket.emit("join-room", { room, name });
+      window.location.href = "team.html";
     }
   </script>
-
 </body>
 </html>
