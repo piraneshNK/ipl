@@ -1,46 +1,116 @@
 <!DOCTYPE html>
-<html>
-<head><title>Select Team</title></head>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Select Your IPL Team</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f2f2f2;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #333;
+    }
+
+    .team-list {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin: 20px 0;
+    }
+
+    .team {
+      background: white;
+      margin: 10px;
+      padding: 15px 25px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.3s;
+    }
+
+    .team:hover {
+      border-color: #007bff;
+      background: #e9f2ff;
+    }
+
+    .selected {
+      border-color: green;
+      background-color: #d4fcd4;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 10px 30px;
+      font-size: 16px;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #status {
+      margin-top: 20px;
+      font-size: 16px;
+    }
+  </style>
+</head>
 <body>
-  <h1>Team Selection</h1>
-  <div id="players"></div>
-  <select id="team">
-    <option>CSK</option>
-    <option>MI</option>
-    <option>RCB</option>
-    <option>RR</option>
-    <option>KKR</option>
-    <option>LSG</option>
-    <option>GT</option>
-    <option>PBKS</option>
-    <option>DC</option>
-    <option>SRH</option>
-  </select>
-  <button onclick="selectTeam()">Choose Team</button>
-  <button onclick="markReady()">Ready</button>
+
+  <h1>Select Your IPL Team</h1>
+
+  <div class="team-list" id="teams">
+    <div class="team" data-team="MI">MI</div>
+    <div class="team" data-team="CSK">CSK</div>
+    <div class="team" data-team="RCB">RCB</div>
+    <div class="team" data-team="KKR">KKR</div>
+    <div class="team" data-team="SRH">SRH</div>
+    <div class="team" data-team="DC">DC</div>
+    <div class="team" data-team="RR">RR</div>
+    <div class="team" data-team="PBKS">PBKS</div>
+    <div class="team" data-team="GT">GT</div>
+    <div class="team" data-team="LSG">LSG</div>
+  </div>
+
+  <button onclick="markReady()">I'm Ready</button>
+
+  <div id="status">Waiting for players...</div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    const name = localStorage.getItem("name");
+
     const room = localStorage.getItem("room");
+    const password = localStorage.getItem("password");
+    const isHost = localStorage.getItem("isHost") === 'true';
+    let selectedTeam = null;
 
-    socket.emit("join-room", { room, name });
+    const teamElements = document.querySelectorAll(".team");
 
-    function selectTeam() {
-      const team = document.getElementById("team").value;
-      socket.emit("select-team", team);
-    }
+    teamElements.forEach(team => {
+      team.addEventListener("click", () => {
+        teamElements.forEach(t => t.classList.remove("selected"));
+        team.classList.add("selected");
+        selectedTeam = team.dataset.team;
+      });
+    });
+
+    socket.emit("join-room", { room, password });
 
     function markReady() {
-      socket.emit("ready");
+      if (!selectedTeam) {
+        alert("Please select a team first!");
+        return;
+      }
+      socket.emit("player-ready", { room, team: selectedTeam });
     }
 
-    socket.on("update-players", (players) => {
-      document.getElementById("players").innerHTML = `
-        <h3>Players Ready: ${players.filter(p => p.ready).length}/${players.length}</h3>
-        ${players.map(p => `<div>${p.name} - ${p.team} ${p.ready ? "✅" : ""}</div>`).join("")}
-      `;
+    socket.on("update-players", ({ total, ready }) => {
+      document.getElementById("status").innerText = `Ready: ${ready}/${total}`;
     });
 
     socket.on("start-auction", () => {
