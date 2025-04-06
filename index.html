@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPL Cricket Auction</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Home Page -->
+        <div id="home-page" class="page active">
+            <div class="min-h-screen flex flex-col items-center justify-center p-4">
+                <div class="w-full max-w-md space-y-8">
+                    <div class="text-center space-y-6">
+                        <div class="relative">
+                            <div class="trophy-icon">🏆</div>
+                        </div>
+                        <h2 class="text-4xl gradient-text">RPL Auction</h2>
+                        <p class="text-lg text-gray-300">Create or join a room to start the auction</p>
+                    </div>
+
+                    <div class="form-container">
+                        <div class="space-y-4">
+                            <div class="relative">
+                                <input type="text" id="room-name" placeholder="Room Name" class="input-field">
+                                <span class="icon">🎮</span>
+                            </div>
+
+                            <div class="relative">
+                                <input type="password" id="room-password" placeholder="Room Password" class="input-field">
+                            </div>
+                        </div>
+
+                        <div class="grid-cols-2">
+                            <button id="create-room" class="btn btn-green">
+                                <span class="flex-center">
+                                    ➕ Create Room
+                                </span>
+                            </button>
+
+                            <button id="join-room" class="btn btn-blue">
+                                <span class="flex-center">
+                                    👥 Join Room
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Select Team Page -->
+        <div id="select-team-page" class="page">
+            <div class="min-h-screen p-8">
+                <div class="max-w-7xl mx-auto">
+                    <div class="flex-between mb-8">
+                        <div>
+                            <h1 class="text-4xl font-bold text-white mb-2">Select Your Team</h1>
+                            <p class="text-gray-400">
+                                <span id="selected-teams-count">0</span> / <span id="total-teams-count">10</span> teams selected
+                            </p>
+                        </div>
+                        <button id="auctioneer-button" class="btn btn-purple">
+                            🏆 Join as Auctioneer
+                        </button>
+                    </div>
+
+                    <div id="teams-grid" class="teams-grid"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auction Page -->
+        <div id="auction-page" class="page">
+            <div class="min-h-screen p-8">
+                <div class="max-w-7xl mx-auto">
+                    <div id="players-table" class="mb-8"></div>
+                    
+                    <div class="auction-grid">
+                        <div class="current-player-section">
+                            <div class="flex-between mb-6">
+                                <h2 class="text-2xl font-bold">Current Player</h2>
+                                <div class="flex-center gap-4">
+                                    <div id="current-bid" class="text-4xl font-bold text-yellow-500">₹0Cr</div>
+                                    <div class="timer">
+                                        <span id="timer">30</span>s
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="current-player-info"></div>
+                        </div>
+
+                        <div class="bidding-controls">
+                            <div class="control-section">
+                                <h2 class="text-2xl font-bold mb-6">Bidding Controls</h2>
+                                <div class="bid-buttons"></div>
+                                <div class="action-buttons">
+                                    <button id="sold-button" class="btn btn-green">Sold</button>
+                                    <button id="unsold-button" class="btn btn-red">Unsold</button>
+                                </div>
+                            </div>
+
+                            <div class="teams-status">
+                                <h2 class="text-2xl font-bold mb-6">Teams Status</h2>
+                                <div id="teams-status-list" class="space-y-4"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>
