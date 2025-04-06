@@ -1,0 +1,9 @@
+[build]
+  command = "pnpm install && pnpm build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/next"
+
+[functions]
+  included_files = ["**/*.ts", "**/*.tsx", "node_modules/**"]
