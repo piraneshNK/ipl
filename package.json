@@ -65,7 +65,6 @@
     "@types/react-dom": "^19",
     "postcss": "^8",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5",
-    "@netlify/next": "^1.4.9"
+    "typescript": "^5"
   }
 }

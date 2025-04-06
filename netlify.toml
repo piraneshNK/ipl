@@ -3,7 +3,4 @@
   publish = ".next"
 
 [[plugins]]
-  package = "@netlify/next"
-
-[functions]
-  included_files = ["**/*.ts", "**/*.tsx", "node_modules/**"]
+  package = "@netlify/plugin-nextjs"
