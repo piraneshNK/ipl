@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,59 +9,37 @@ import PlayerCard from "@/components/player-card"
 import BidButton from "@/components/bid-button"
 import Timer from "@/components/timer"
 import TeamPurseCard from "@/components/team-purse-card"
-import { players, teams, formatPrice, type Player, type Team } from "@/data/players"
+import { formatPrice, type Player, type Team } from "@/data/players"
+import { useAuth } from "@/hooks/use-auth"
+import {
+  subscribeToRoom,
+  subscribeToTeams,
+  subscribeToPlayers,
+  subscribeToBids,
+  subscribeToTimer,
+  placeBid,
+} from "@/services/auction-service"
+import { useToast } from "@/components/ui/use-toast"
 
 // Bid amounts
 const bidAmounts = ["₹5L", "₹10L", "₹25L", "₹50L", "₹1Cr"]
 
 export default function AuctionPage() {
-  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0)
-  const [currentBid, setCurrentBid] = useState("")
-  const [currentBidValue, setCurrentBidValue] = useState(0)
-  const [currentBidder, setCurrentBidder] = useState("")
-  const [bids, setBids] = useState<string[]>([])
-  const [allTeams, setAllTeams] = useState<Team[]>(teams)
-  const [boughtPlayers, setBoughtPlayers] = useState<Player[]>([])
-  const [timerKey, setTimerKey] = useState(0)
-  const [isTimerRunning, setIsTimerRunning] = useState(true)
-  const [teamName, setTeamName] = useState("")
+  const [roomId, setRoomId] = useState("")
+  const [roomData, setRoomData] = useState<any>(null)
+  const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
+  const [allTeams, setAllTeams] = useState<Team[]>([])
+  const [allPlayers, setAllPlayers] = useState<Player[]>([])
+  const [bids, setBids] = useState<any[]>([])
+  const [timerData, setTimerData] = useState<any>(null)
   const [userTeam, setUserTeam] = useState<Team | null>(null)
+  const [teamId, setTeamId] = useState<number | null>(null)
+
   const router = useRouter()
+  const { user, loading } = useAuth()
+  const { toast } = useToast()
 
-  useEffect(() => {
-    // In a real app, we would fetch this from a database or state management
-    const storedRoomName = localStorage.getItem("roomName")
-    const storedTeamId = localStorage.getItem("selectedTeam")
-
-    if (!storedRoomName) {
-      router.push("/")
-      return
-    }
-
-    // Find the user's team
-    if (storedTeamId) {
-      const teamId = Number.parseInt(storedTeamId)
-      const team = allTeams.find((t) => t.id === teamId)
-      if (team) {
-        setUserTeam(team)
-        setTeamName(team.name)
-      } else {
-        // Default team if not found
-        setTeamName("Mumbai Warriors")
-      }
-    } else {
-      // Default team if not selected
-      setTeamName("Mumbai Warriors")
-    }
-
-    // Initialize with base price as current bid
-    const startingBid = formatPrice(players[currentPlayerIndex].basePriceValue)
-    setCurrentBid(startingBid)
-    setCurrentBidValue(players[currentPlayerIndex].basePriceValue)
-    setBids([`Starting bid: ${startingBid}`])
-  }, [router, currentPlayerIndex, allTeams])
-
-  // Convert bid amount string to number value
+  // Get bid value from string
   const getBidValue = (bidAmount: string): number => {
     if (bidAmount.includes("Cr")) {
       return Number.parseFloat(bidAmount.replace("₹", "").replace("Cr", "")) * 100
@@ -71,106 +49,125 @@ export default function AuctionPage() {
     return 0
   }
 
-  const handleBid = (amount: string) => {
-    const bidValue = getBidValue(amount)
-
-    // Check if user's team has enough purse left
-    if (userTeam && userTeam.purse - userTeam.spent < bidValue) {
-      setBids([`Not enough funds to bid ${amount}`, ...bids])
+  useEffect(() => {
+    // Check if user is authenticated
+    if (!loading && !user) {
+      router.push("/")
       return
     }
 
-    const newBid = `${teamName} bid ${amount}`
-    setBids([newBid, ...bids])
-    setCurrentBid(amount)
-    setCurrentBidValue(bidValue)
-    setCurrentBidder(teamName)
+    // Get room ID from localStorage
+    const storedRoomId = localStorage.getItem("roomId")
+    const storedTeamId = localStorage.getItem("selectedTeam")
 
-    // Reset timer when a bid is placed
-    setTimerKey((prev) => prev + 1)
-    setIsTimerRunning(true)
+    if (!storedRoomId) {
+      router.push("/")
+      return
+    }
+
+    setRoomId(storedRoomId)
+
+    if (storedTeamId) {
+      setTeamId(Number.parseInt(storedTeamId))
+    }
+
+    // Subscribe to room data
+    const unsubscribeRoom = subscribeToRoom(storedRoomId, (data) => {
+      setRoomData(data)
+    })
+
+    // Subscribe to teams
+    const unsubscribeTeams = subscribeToTeams(storedRoomId, (teams) => {
+      setAllTeams(teams)
+
+      // Find user's team
+      if (storedTeamId) {
+        const teamId = Number.parseInt(storedTeamId)
+        const team = teams.find((t) => t.id === teamId)
+        if (team) {
+          setUserTeam(team)
+        }
+      }
+    })
+
+    // Subscribe to players
+    const unsubscribePlayers = subscribeToPlayers(storedRoomId, (players) => {
+      setAllPlayers(players)
+
+      // Find current player
+      const current = players.find((p) => p.status === "Current")
+      if (current) {
+        setCurrentPlayer(current)
+      }
+    })
+
+    // Subscribe to bids
+    const unsubscribeBids = subscribeToBids(storedRoomId, (bids) => {
+      setBids(bids)
+    })
+
+    // Subscribe to timer
+    const unsubscribeTimer = subscribeToTimer(storedRoomId, (data) => {
+      setTimerData(data)
+    })
+
+    return () => {
+      unsubscribeRoom()
+      unsubscribeTeams()
+      unsubscribePlayers()
+      unsubscribeBids()
+      unsubscribeTimer()
+    }
+  }, [router, user, loading])
+
+  const handleBid = async (amount: string) => {
+    if (!user || !userTeam || !currentPlayer) return
+
+    const bidValue = getBidValue(amount)
+
+    // Check if user's team has enough purse left
+    if (userTeam.purse - userTeam.spent < bidValue) {
+      toast({
+        title: "Insufficient Funds",
+        description: `Not enough funds to bid ${amount}`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Check if bid is higher than current bid
+    if (bidValue <= roomData?.currentBidValue) {
+      toast({
+        title: "Invalid Bid",
+        description: "Your bid must be higher than the current bid",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await placeBid(roomId, userTeam.id, userTeam.name, amount, bidValue)
+
+      toast({
+        title: "Bid Placed",
+        description: `You bid ${amount} for ${currentPlayer.name}`,
+      })
+    } catch (error) {
+      console.error("Error placing bid:", error)
+      toast({
+        title: "Error",
+        description: "Failed to place bid",
+        variant: "destructive",
+      })
+    }
   }
 
-  // Use useCallback to memoize the function to prevent unnecessary re-renders
-  const handleTimerEnd = useCallback(() => {
-    if (currentBidder) {
-      // Player sold
-      const currentPlayer = players[currentPlayerIndex]
-      const soldMessage = `${currentPlayer.name} sold to ${currentBidder} for ${currentBid}`
-      setBids((prevBids) => [soldMessage, ...prevBids])
-
-      // Update team data
-      setAllTeams((prevTeams) => {
-        return prevTeams.map((team) => {
-          if (team.name === currentBidder) {
-            // Add player to team and update spent amount
-            const updatedPlayer = {
-              ...currentPlayer,
-              team: team.name,
-              soldFor: currentBid,
-              soldForValue: currentBidValue,
-              status: "Sold" as const,
-            }
-
-            return {
-              ...team,
-              spent: team.spent + currentBidValue,
-              players: [...team.players, updatedPlayer],
-            }
-          }
-          return team
-        })
-      })
-
-      // Add to bought players
-      const soldPlayer = {
-        ...currentPlayer,
-        soldFor: currentBid,
-        soldForValue: currentBidValue,
-        team: currentBidder,
-        status: "Sold" as const,
-      }
-
-      setBoughtPlayers((prevPlayers) => [...prevPlayers, soldPlayer])
-
-      // Move to next player
-      setTimeout(() => {
-        if (currentPlayerIndex < players.length - 1) {
-          setCurrentPlayerIndex((prevIndex) => prevIndex + 1)
-          setCurrentBid("")
-          setCurrentBidValue(0)
-          setCurrentBidder("")
-          setTimerKey((prev) => prev + 1)
-          setIsTimerRunning(true)
-        } else {
-          // Auction complete
-          setBids((prevBids) => ["Auction complete!", ...prevBids])
-          setIsTimerRunning(false)
-        }
-      }, 2000)
-    } else {
-      // No bids, player unsold
-      const unsoldMessage = `${players[currentPlayerIndex].name} unsold`
-      setBids((prevBids) => [unsoldMessage, ...prevBids])
-
-      // Move to next player
-      setTimeout(() => {
-        if (currentPlayerIndex < players.length - 1) {
-          setCurrentPlayerIndex((prevIndex) => prevIndex + 1)
-          setTimerKey((prev) => prev + 1)
-          setIsTimerRunning(true)
-        } else {
-          // Auction complete
-          setBids((prevBids) => ["Auction complete!", ...prevBids])
-          setIsTimerRunning(false)
-        }
-      }, 2000)
-    }
-  }, [currentBidder, currentBid, currentBidValue, currentPlayerIndex])
-
-  // Format purse amount for display
-  const formatPurseDisplay = (amount: number) => {
-    return `${(amount / 100).toFixed(2)}Cr`
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    )
   }
 
   return (
@@ -180,24 +177,29 @@ export default function AuctionPage() {
         <div className="lg:col-span-2">
           <Card className="mb-4">
             <CardHeader>
-              <CardTitle className="text-2xl font-bold text-center">Player Auction</CardTitle>
+              <CardTitle className="text-2xl font-bold text-center">IPL Player Auction</CardTitle>
             </CardHeader>
             <CardContent>
-              {currentPlayerIndex < players.length && (
+              {currentPlayer ? (
                 <>
-                  <PlayerCard player={players[currentPlayerIndex]} />
+                  <PlayerCard player={currentPlayer} />
 
                   <div className="mt-4 flex justify-center">
-                    <Timer key={timerKey} seconds={10} onTimerEnd={handleTimerEnd} isRunning={isTimerRunning} />
+                    <Timer
+                      key={timerData?.timerKey}
+                      seconds={timerData?.timerSeconds || 10}
+                      onTimerEnd={() => {}} // Timer end is handled by the server
+                      isRunning={timerData?.timerRunning || false}
+                    />
                   </div>
 
                   <div className="mt-4 text-center">
-                    {currentBidder ? (
+                    {roomData?.currentBidder ? (
                       <p className="font-medium">
-                        Current Bid: {currentBid} by {currentBidder}
+                        Current Bid: {roomData.currentBid} by {roomData.currentBidder}
                       </p>
                     ) : (
-                      <p className="font-medium">Starting Bid: {currentBid}</p>
+                      <p className="font-medium">Starting Bid: {currentPlayer.basePrice}</p>
                     )}
                   </div>
 
@@ -205,14 +207,18 @@ export default function AuctionPage() {
                     {bidAmounts.map((amount, index) => {
                       const bidValue = getBidValue(amount)
                       const isDisabled =
-                        !isTimerRunning ||
-                        bidValue <= currentBidValue ||
+                        !timerData?.timerRunning ||
+                        bidValue <= roomData?.currentBidValue ||
                         (userTeam && userTeam.purse - userTeam.spent < bidValue)
 
                       return <BidButton key={index} amount={amount} onBid={handleBid} disabled={isDisabled} />
                     })}
                   </div>
                 </>
+              ) : (
+                <div className="text-center p-8">
+                  <p>Waiting for auction to start...</p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -235,26 +241,30 @@ export default function AuctionPage() {
                   <CardTitle className="text-xl font-bold">Team Info</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>Team:</span>
-                      <span className="font-bold">{teamName}</span>
+                  {userTeam ? (
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span>Team:</span>
+                        <span className="font-bold">{userTeam.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Purse Left:</span>
+                        <span className="font-bold">{formatPrice(userTeam.purse - userTeam.spent)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total Spent:</span>
+                        <span className="font-bold">{formatPrice(userTeam.spent)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Players Bought:</span>
+                        <span className="font-bold">{userTeam.players?.length || 0}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Purse Left:</span>
-                      <span className="font-bold">
-                        {userTeam ? formatPurseDisplay(userTeam.purse - userTeam.spent) : "100.00Cr"}
-                      </span>
+                  ) : (
+                    <div className="text-center p-4">
+                      <p>No team selected</p>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Total Spent:</span>
-                      <span className="font-bold">{userTeam ? formatPurseDisplay(userTeam.spent) : "0.00Cr"}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Players Bought:</span>
-                      <span className="font-bold">{userTeam ? userTeam.players.length : 0}</span>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -268,9 +278,9 @@ export default function AuctionPage() {
                 <CardContent>
                   <div className="h-[300px] overflow-y-auto space-y-2">
                     {bids.length > 0 ? (
-                      bids.map((bid, index) => (
-                        <div key={index} className="p-2 border-b">
-                          {bid}
+                      bids.map((bid) => (
+                        <div key={bid.id} className="p-2 border-b">
+                          {bid.message}
                         </div>
                       ))
                     ) : (
@@ -289,16 +299,20 @@ export default function AuctionPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="h-[300px] overflow-y-auto space-y-2">
-                    {boughtPlayers.length > 0 ? (
-                      boughtPlayers.map((player) => (
-                        <div key={player.id} className="p-2 border-b flex justify-between">
-                          <div>
-                            <span className="font-medium">{player.name}</span>
-                            <div className="text-sm text-muted-foreground">{player.team}</div>
+                    {allPlayers.filter((p) => p.status === "Sold").length > 0 ? (
+                      allPlayers
+                        .filter((p) => p.status === "Sold")
+                        .map((player) => (
+                          <div key={player.id} className="p-2 border-b flex justify-between">
+                            <div>
+                              <span className="font-medium">{player.name}</span>
+                              <div className="text-sm text-muted-foreground">
+                                {allTeams.find((t) => t.id === player.teamId)?.name}
+                              </div>
+                            </div>
+                            <Badge>{player.soldFor}</Badge>
                           </div>
-                          <Badge>{player.soldFor}</Badge>
-                        </div>
-                      ))
+                        ))
                     ) : (
                       <div className="text-center text-muted-foreground">No players bought yet</div>
                     )}

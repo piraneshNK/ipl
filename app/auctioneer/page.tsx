@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,196 +9,214 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import PlayerCard from "@/components/player-card"
 import Timer from "@/components/timer"
-import { players, teams, formatPrice, type Player, type Team } from "@/data/players"
-
-// Sample player data
-// const samplePlayers = [
-//   { id: 1, name: "Virat Kohli", basePrice: "2Cr", role: "Batter" },
-//   { id: 2, name: "Jasprit Bumrah", basePrice: "2Cr", role: "Bowler" },
-//   { id: 3, name: "Ravindra Jadeja", basePrice: "1.5Cr", role: "All-rounder" },
-//   { id: 4, name: "KL Rahul", basePrice: "1Cr", role: "Batter" },
-//   { id: 5, name: "Yuzvendra Chahal", basePrice: "75L", role: "Bowler" },
-//   { id: 6, name: "Rishabh Pant", basePrice: "1.5Cr", role: "Batter" },
-//   { id: 7, name: "Hardik Pandya", basePrice: "1.5Cr", role: "All-rounder" },
-//   { id: 8, name: "Rohit Sharma", basePrice: "2Cr", role: "Batter" },
-//   { id: 9, name: "Mohammed Shami", basePrice: "1Cr", role: "Bowler" },
-//   { id: 10, name: "Shreyas Iyer", basePrice: "1Cr", role: "Batter" },
-// ]
+import { formatPrice, type Player, type Team } from "@/data/players"
+import { useAuth } from "@/hooks/use-auth"
+import {
+  subscribeToRoom,
+  subscribeToTeams,
+  subscribeToPlayers,
+  subscribeToBids,
+  subscribeToTimer,
+  startAuction,
+  handleTimerEnd,
+  moveToNextPlayer,
+  startTimer,
+  stopTimer,
+} from "@/services/auction-service"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function AuctioneerPage() {
-  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(-1)
-  const [auctionStarted, setAuctionStarted] = useState(false)
-  const [currentBid, setCurrentBid] = useState("")
-  const [currentBidValue, setCurrentBidValue] = useState(0)
-  const [currentBidder, setCurrentBidder] = useState("")
-  const [bids, setBids] = useState<string[]>([])
-  const [allTeams, setAllTeams] = useState<Team[]>(teams)
-  const [soldPlayers, setSoldPlayers] = useState<Player[]>([])
-  const [timerKey, setTimerKey] = useState(0)
-  const [isTimerRunning, setIsTimerRunning] = useState(false)
-  const [roomName, setRoomName] = useState("")
+  const [roomId, setRoomId] = useState("")
+  const [roomData, setRoomData] = useState<any>(null)
+  const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
+  const [allTeams, setAllTeams] = useState<Team[]>([])
+  const [allPlayers, setAllPlayers] = useState<Player[]>([])
+  const [bids, setBids] = useState<any[]>([])
+  const [timerData, setTimerData] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
   const router = useRouter()
+  const { user, loading } = useAuth()
+  const { toast } = useToast()
 
   useEffect(() => {
-    // In a real app, we would fetch this from a database or state management
-    const storedRoomName = localStorage.getItem("roomName")
-    const storedIsAuctioneer = localStorage.getItem("isAuctioneer") === "true"
-
-    if (!storedRoomName || !storedIsAuctioneer) {
+    // Check if user is authenticated
+    if (!loading && !user) {
       router.push("/")
       return
     }
 
-    setRoomName(storedRoomName)
-  }, [router])
+    // Get room ID from localStorage
+    const storedRoomId = localStorage.getItem("roomId")
+    const storedIsAuctioneer = localStorage.getItem("isAuctioneer") === "true"
 
-  const startAuction = () => {
-    setAuctionStarted(true)
-    setCurrentPlayerIndex(0)
+    if (!storedRoomId || !storedIsAuctioneer) {
+      router.push("/")
+      return
+    }
 
-    // Set initial bid to base price
-    const startingBid = formatPrice(players[0].basePriceValue)
-    setCurrentBid(startingBid)
-    setCurrentBidValue(players[0].basePriceValue)
+    setRoomId(storedRoomId)
 
-    setIsTimerRunning(true)
-    setBids(["Auction started!", `Starting bid for ${players[0].name}: ${startingBid}`])
-  }
+    // Subscribe to room data
+    const unsubscribeRoom = subscribeToRoom(storedRoomId, (data) => {
+      setRoomData(data)
+    })
 
-  // Use useCallback to memoize the function to prevent unnecessary re-renders
-  const handleTimerEnd = useCallback(() => {
-    if (currentBidder) {
-      // Player sold
-      const currentPlayer = players[currentPlayerIndex]
-      const soldMessage = `${currentPlayer.name} sold to ${currentBidder} for ${currentBid}`
-      setBids((prevBids) => [soldMessage, ...prevBids])
+    // Subscribe to teams
+    const unsubscribeTeams = subscribeToTeams(storedRoomId, (teams) => {
+      setAllTeams(teams)
+    })
 
-      // Update team data
-      setAllTeams((prevTeams) => {
-        return prevTeams.map((team) => {
-          if (team.name === currentBidder) {
-            // Add player to team and update spent amount
-            const updatedPlayer = {
-              ...currentPlayer,
-              team: team.name,
-              soldFor: currentBid,
-              soldForValue: currentBidValue,
-              status: "Sold" as const,
-            }
+    // Subscribe to players
+    const unsubscribePlayers = subscribeToPlayers(storedRoomId, (players) => {
+      setAllPlayers(players)
 
-            return {
-              ...team,
-              spent: team.spent + currentBidValue,
-              players: [...team.players, updatedPlayer],
-            }
-          }
-          return team
-        })
+      // Find current player
+      const current = players.find((p) => p.status === "Current")
+      if (current) {
+        setCurrentPlayer(current)
+      }
+    })
+
+    // Subscribe to bids
+    const unsubscribeBids = subscribeToBids(storedRoomId, (bids) => {
+      setBids(bids)
+    })
+
+    // Subscribe to timer
+    const unsubscribeTimer = subscribeToTimer(storedRoomId, (data) => {
+      setTimerData(data)
+    })
+
+    return () => {
+      unsubscribeRoom()
+      unsubscribeTeams()
+      unsubscribePlayers()
+      unsubscribeBids()
+      unsubscribeTimer()
+    }
+  }, [router, user, loading])
+
+  const handleStartAuction = async () => {
+    if (!roomId) return
+
+    setIsLoading(true)
+    try {
+      await startAuction(roomId)
+
+      toast({
+        title: "Auction Started",
+        description: "The auction has begun!",
       })
-
-      // Add to sold players
-      const soldPlayer = {
-        ...currentPlayer,
-        soldFor: currentBid,
-        soldForValue: currentBidValue,
-        team: currentBidder,
-        status: "Sold" as const,
-      }
-
-      setSoldPlayers((prevPlayers) => [...prevPlayers, soldPlayer])
-    } else {
-      // No bids, player unsold
-      const unsoldMessage = `${players[currentPlayerIndex].name} unsold`
-      setBids((prevBids) => [unsoldMessage, ...prevBids])
-    }
-
-    setIsTimerRunning(false)
-  }, [currentBidder, currentBid, currentBidValue, currentPlayerIndex])
-
-  const moveToNextPlayer = () => {
-    if (currentPlayerIndex < players.length - 1) {
-      const nextIndex = currentPlayerIndex + 1
-      setCurrentPlayerIndex(nextIndex)
-
-      // Set initial bid to base price
-      const startingBid = formatPrice(players[nextIndex].basePriceValue)
-      setCurrentBid(startingBid)
-      setCurrentBidValue(players[nextIndex].basePriceValue)
-
-      setCurrentBidder("")
-      setTimerKey((prev) => prev + 1)
-      setIsTimerRunning(true)
-
-      // Add starting bid message
-      setBids((prevBids) => [`Starting bid for ${players[nextIndex].name}: ${startingBid}`, ...prevBids])
-    } else {
-      // Auction complete
-      setBids((prevBids) => ["Auction complete!", ...prevBids])
+    } catch (error) {
+      console.error("Error starting auction:", error)
+      toast({
+        title: "Error",
+        description: "Failed to start auction",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  // Simulate receiving bids (in a real app, this would come from a websocket)
-  useEffect(() => {
-    if (!isTimerRunning || currentPlayerIndex < 0) return
+  const handleNextPlayer = async () => {
+    if (!roomId) return
 
-    const teamNames = allTeams.map((t) => t.name)
-    const amounts = ["₹5L", "₹10L", "₹25L", "₹50L", "₹1Cr"]
-    const bidValues = [5, 10, 25, 50, 100]
-
-    const bidInterval = setInterval(() => {
-      // Randomly select a team that has enough funds
-      const eligibleTeams = allTeams.filter((team) => team.purse - team.spent >= currentBidValue)
-
-      if (eligibleTeams.length === 0) {
-        clearInterval(bidInterval)
-        return
+    setIsLoading(true)
+    try {
+      // First handle the current player's timer end if it's still running
+      if (timerData?.timerRunning) {
+        await handleTimerEnd(roomId)
       }
 
-      const randomTeam = eligibleTeams[Math.floor(Math.random() * eligibleTeams.length)]
+      // Then move to the next player
+      const success = await moveToNextPlayer(roomId)
 
-      // Find a valid bid amount (higher than current bid)
-      const validBidIndices = bidValues.findIndex((value) => value > currentBidValue)
-      if (validBidIndices === -1) return
-
-      const randomBidIndex = validBidIndices + Math.floor(Math.random() * (bidValues.length - validBidIndices))
-      const randomAmount = amounts[randomBidIndex]
-      const randomBidValue = bidValues[randomBidIndex]
-
-      // Only place a bid if it's higher than the current bid and team has enough funds
-      if (
-        randomBidValue > currentBidValue &&
-        randomTeam.purse - randomTeam.spent >= randomBidValue &&
-        Math.random() > 0.7
-      ) {
-        // 30% chance to bid
-
-        const newBid = `${randomTeam.name} bid ${randomAmount}`
-        setBids((prevBids) => [newBid, ...prevBids])
-        setCurrentBid(randomAmount)
-        setCurrentBidValue(randomBidValue)
-        setCurrentBidder(randomTeam.name)
-
-        // Reset timer when a bid is placed
-        setTimerKey((prev) => prev + 1)
+      if (success) {
+        toast({
+          title: "Next Player",
+          description: "Moving to the next player",
+        })
+      } else {
+        toast({
+          title: "Auction Complete",
+          description: "All players have been auctioned",
+        })
       }
-    }, 2000)
+    } catch (error) {
+      console.error("Error moving to next player:", error)
+      toast({
+        title: "Error",
+        description: "Failed to move to next player",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-    return () => clearInterval(bidInterval)
-  }, [isTimerRunning, currentPlayerIndex, currentBidValue, allTeams])
+  const handleStopTimer = async () => {
+    if (!roomId) return
+
+    try {
+      await stopTimer(roomId)
+
+      toast({
+        title: "Timer Stopped",
+        description: "The timer has been paused",
+      })
+    } catch (error) {
+      console.error("Error stopping timer:", error)
+      toast({
+        title: "Error",
+        description: "Failed to stop timer",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleStartTimer = async () => {
+    if (!roomId) return
+
+    try {
+      await startTimer(roomId)
+
+      toast({
+        title: "Timer Started",
+        description: "The timer has been started",
+      })
+    } catch (error) {
+      console.error("Error starting timer:", error)
+      toast({
+        title: "Error",
+        description: "Failed to start timer",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto p-4">
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">Auctioneer Control Panel</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">IPL Auctioneer Control Panel</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-center mb-4">Room: {roomName}</p>
+          <p className="text-center mb-4">Room ID: {roomId}</p>
 
-          {!auctionStarted ? (
+          {!roomData?.auctionStarted ? (
             <div className="text-center">
-              <Button onClick={startAuction} size="lg">
-                Start Auction
+              <Button onClick={handleStartAuction} size="lg" disabled={isLoading}>
+                {isLoading ? "Starting..." : "Start Auction"}
               </Button>
             </div>
           ) : (
@@ -210,32 +228,47 @@ export default function AuctioneerPage() {
                     <CardTitle>Current Player</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {currentPlayerIndex < players.length ? (
+                    {currentPlayer ? (
                       <>
-                        <PlayerCard player={players[currentPlayerIndex]} />
+                        <PlayerCard player={currentPlayer} />
 
                         <div className="mt-4 flex justify-center">
-                          <Timer key={timerKey} seconds={10} onTimerEnd={handleTimerEnd} isRunning={isTimerRunning} />
+                          <Timer
+                            key={timerData?.timerKey}
+                            seconds={timerData?.timerSeconds || 10}
+                            onTimerEnd={() => handleTimerEnd(roomId)}
+                            isRunning={timerData?.timerRunning || false}
+                          />
                         </div>
 
                         <div className="mt-4 flex justify-center">
-                          {currentBidder ? (
+                          {roomData?.currentBidder ? (
                             <div className="text-center mb-4">
                               <p>
-                                Current Bid: {currentBid} by {currentBidder}
+                                Current Bid: {roomData.currentBid} by {roomData.currentBidder}
                               </p>
                             </div>
                           ) : (
                             <div className="text-center mb-4">
-                              <p>Starting Bid: {currentBid}</p>
+                              <p>Starting Bid: {currentPlayer.basePrice}</p>
                             </div>
                           )}
                         </div>
 
-                        <div className="mt-4 flex justify-center">
-                          <Button onClick={moveToNextPlayer} disabled={isTimerRunning}>
-                            Next Player
+                        <div className="mt-4 flex justify-center space-x-2">
+                          <Button onClick={handleNextPlayer} disabled={isLoading}>
+                            {isLoading ? "Processing..." : "Next Player"}
                           </Button>
+
+                          {timerData?.timerRunning ? (
+                            <Button onClick={handleStopTimer} variant="outline">
+                              Pause Timer
+                            </Button>
+                          ) : (
+                            <Button onClick={handleStartTimer} variant="outline">
+                              Resume Timer
+                            </Button>
+                          )}
                         </div>
                       </>
                     ) : (
@@ -263,9 +296,9 @@ export default function AuctioneerPage() {
                       <CardContent>
                         <div className="h-[200px] overflow-y-auto space-y-2">
                           {bids.length > 0 ? (
-                            bids.map((bid, index) => (
-                              <div key={index} className="p-2 border-b">
-                                {bid}
+                            bids.map((bid) => (
+                              <div key={bid.id} className="p-2 border-b">
+                                {bid.message}
                               </div>
                             ))
                           ) : (
@@ -285,7 +318,7 @@ export default function AuctioneerPage() {
                         <div className="h-[200px] overflow-y-auto space-y-2">
                           {allTeams.map((team) => (
                             <div key={team.id} className="p-2 border-b flex justify-between">
-                              <span>{team.name}</span>
+                              <span>{team.shortName}</span>
                               <span>{formatPrice(team.purse - team.spent)}</span>
                             </div>
                           ))}
@@ -311,36 +344,28 @@ export default function AuctioneerPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Role</TableHead>
+                  <TableHead className="hidden md:table-cell">Role</TableHead>
                   <TableHead>Base Price</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {players.map((player, index) => {
-                  const soldPlayer = soldPlayers.find((p) => p.id === player.id)
-                  let status = "Pending"
-                  if (index < currentPlayerIndex) {
-                    status = soldPlayer ? `Sold to ${soldPlayer.team} for ${soldPlayer.soldFor}` : "Unsold"
-                  } else if (index === currentPlayerIndex) {
-                    status = "Current"
-                  }
-
+                {allPlayers.slice(0, 50).map((player) => {
                   return (
                     <TableRow key={player.id}>
                       <TableCell>{player.name}</TableCell>
-                      <TableCell>{player.role}</TableCell>
+                      <TableCell className="hidden md:table-cell">{player.role}</TableCell>
                       <TableCell>{player.basePrice}</TableCell>
                       <TableCell>
-                        {status === "Current" ? (
+                        {player.status === "Current" ? (
                           <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900">
                             Current
                           </Badge>
-                        ) : status === "Unsold" ? (
+                        ) : player.status === "Unsold" ? (
                           <Badge variant="outline" className="bg-red-100 dark:bg-red-900">
                             Unsold
                           </Badge>
-                        ) : status.startsWith("Sold") ? (
+                        ) : player.status === "Sold" ? (
                           <Badge variant="outline" className="bg-green-100 dark:bg-green-900">
                             Sold
                           </Badge>
