@@ -1,10 +1,8 @@
 let userConfig = undefined
 try {
-  // try to import ESM first
   userConfig = await import('./v0-user-next.config.mjs')
 } catch (e) {
   try {
-    // fallback to CJS import
     userConfig = await import("./v0-user-next.config");
   } catch (innerError) {
     // ignore error
@@ -27,12 +25,11 @@ const nextConfig = {
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
   },
+  output: 'export',  // <-- IMPORTANT for Netlify Static Export
 }
 
 if (userConfig) {
-  // ESM imports will have a "default" property
   const config = userConfig.default || userConfig
-
   for (const key in config) {
     if (
       typeof nextConfig[key] === 'object' &&
